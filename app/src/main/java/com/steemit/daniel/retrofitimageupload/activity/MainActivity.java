@@ -1,20 +1,21 @@
 package com.steemit.daniel.retrofitimageupload.activity;
 
 import android.app.Activity;
-import android.app.Service;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Bundle;
 import android.provider.MediaStore;
+import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.support.v7.widget.AppCompatButton;
 import android.support.v7.widget.AppCompatImageView;
-import android.util.Log;
 import android.view.View;
 import android.widget.RelativeLayout;
 
@@ -25,20 +26,19 @@ import com.steemit.daniel.retrofitimageupload.utils.RetrofitClientUtil;
 
 import java.io.File;
 
-import butterknife.BindInt;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.Unbinder;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
-import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
 public class MainActivity extends AppCompatActivity {
     private static final int PICK_IMAGE = 100;
+    private static final int PERMISSION_STORAGE = 2;
 
     @BindView(R.id.parent_layout)
     protected RelativeLayout mParent;
@@ -67,12 +67,22 @@ public class MainActivity extends AppCompatActivity {
         mAddImage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent();
-                intent.setType("image/*");
-                intent.setAction(Intent.ACTION_GET_CONTENT);
-                startActivityForResult(Intent.createChooser(intent, "Select Image"), PICK_IMAGE);
+                if (ContextCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                        != PackageManager.PERMISSION_GRANTED
+                        && ContextCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        != PackageManager.PERMISSION_GRANTED) {
+
+                    ActivityCompat.requestPermissions(MainActivity.this,
+                            new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE, android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                            PERMISSION_STORAGE);
+
+                } else {
+                    openImage();
+                }
+//
             }
         });
+
 
         mBtnUpload.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -82,6 +92,13 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
+    }
+
+    private void openImage() {
+        Intent intent = new Intent();
+        intent.setType("image/*");
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        startActivityForResult(Intent.createChooser(intent, "Select Image"), PICK_IMAGE);
     }
 
     private void uploadImage() {
@@ -95,9 +112,9 @@ public class MainActivity extends AppCompatActivity {
         responseCall.enqueue(new Callback<UploadResponse>() {
             @Override
             public void onResponse(Call<UploadResponse> call, Response<UploadResponse> response) {
-                if (response.isSuccessful()){
+                if (response.isSuccessful()) {
                     UploadResponse resp = response.body();
-                    if (resp.getCode() == 200){
+                    if (resp.getCode() == 200) {
                         mSnackbar = Snackbar.make(mParent, resp.getMessage(), Snackbar.LENGTH_LONG);
                         View views = mSnackbar.getView();
                         views.setBackgroundColor(ContextCompat.getColor(MainActivity.this, R.color.colorPrimary));
@@ -127,9 +144,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode) {
+            case PERMISSION_STORAGE: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    openImage();
+                }
+
+                return;
+            }
+        }
+    }
+
     private String getRealPathFromURI(Uri selectImageUri) {
         Cursor cursor = getContentResolver().query(selectImageUri, null, null, null, null);
-        if (cursor == null) { // Source is Dropbox or other similar local file path
+        if (cursor == null) {
             return selectImageUri.getPath();
         } else {
             cursor.moveToFirst();
